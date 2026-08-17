@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 11% 7%;
+  --foreground: 0 0% 98%;
+  --card: 215 14% 11%;
+  --card-foreground: 0 0% 98%;
+  --primary: 158 84% 41%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 217 19% 17%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 217 19% 17%;
+  --muted-foreground: 215 16% 57%;
+  --accent: 217 19% 20%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 217 19% 18%;
+  --input: 217 19% 18%;
+  --ring: 158 84% 41%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
