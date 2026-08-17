@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
 import { toast } from 'sonner'
-import { formatUSDT } from '@/lib/utils'
 
 const PAYMENT_METHODS = [
   { key: 'airtel', label: 'Airtel Money' },
@@ -57,7 +56,7 @@ export default function CreateOfferPage() {
     }
     setLoading(true)
     try {
-      const offer = await db.entities.Offer.create({
+      await db.entities.Offer.create({
         seller_id: user.id,
         type: form.type,
         amount: parseFloat(form.amount),
@@ -79,17 +78,17 @@ export default function CreateOfferPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="font-heading font-bold text-3xl mb-8">Create Offer</h1>
+    <div className="max-w-2xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+      <h1 className="font-heading font-bold text-2xl sm:text-3xl mb-6 sm:mb-8">Create Offer</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Type */}
-        <Card>
+        <Card className="p-4 sm:p-5">
           <Label>Trade type</Label>
           <div className="flex gap-3 mt-2">
             {['sell', 'buy'].map(t => (
               <button key={t} type="button" onClick={() => setForm({ ...form, type: t })}
-                className={`flex-1 py-3 rounded-lg font-semibold capitalize transition-colors ${
+                className={`flex-1 py-3 rounded-lg font-semibold capitalize text-sm transition-colors ${
                   form.type === t ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-accent'
                 }`}>
                 {t === 'sell' ? 'Sell USDT' : 'Buy USDT'}
@@ -99,8 +98,8 @@ export default function CreateOfferPage() {
         </Card>
 
         {/* Amount and rate */}
-        <Card>
-          <div className="grid grid-cols-2 gap-4">
+        <Card className="p-4 sm:p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Amount (USDT)</Label>
               <Input type="number" step="0.01" min="1" required value={form.amount}
@@ -112,7 +111,7 @@ export default function CreateOfferPage() {
                 onChange={e => setForm({ ...form, rate: e.target.value })} placeholder="1800" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
               <Label>Min per trade (USDT)</Label>
               <Input type="number" step="0.01" value={form.min_amount}
@@ -132,12 +131,12 @@ export default function CreateOfferPage() {
         </Card>
 
         {/* Network */}
-        <Card>
+        <Card className="p-4 sm:p-5">
           <Label>Network</Label>
           <div className="flex gap-3 mt-2">
             {NETWORKS.map(n => (
               <button key={n.key} type="button" onClick={() => setForm({ ...form, network: n.key })}
-                className={`flex-1 py-3 rounded-lg font-semibold transition-colors ${
+                className={`flex-1 py-3 rounded-lg font-semibold text-sm transition-colors ${
                   form.network === n.key ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-accent'
                 }`}>
                 {n.label}
@@ -147,12 +146,12 @@ export default function CreateOfferPage() {
         </Card>
 
         {/* Payment methods */}
-        <Card>
+        <Card className="p-4 sm:p-5">
           <Label>Accepted payment methods</Label>
           <div className="grid grid-cols-2 gap-3 mt-2">
             {PAYMENT_METHODS.map(m => (
               <button key={m.key} type="button" onClick={() => togglePaymentMethod(m.key)}
-                className={`py-3 px-4 rounded-lg font-medium text-sm transition-colors ${
+                className={`py-3 px-3 sm:px-4 rounded-lg font-medium text-sm transition-colors text-center ${
                   form.payment_methods.includes(m.key) ? 'bg-primary/10 text-primary border border-primary/30' : 'bg-secondary text-muted-foreground border border-border'
                 }`}>
                 {m.label}
@@ -162,7 +161,7 @@ export default function CreateOfferPage() {
         </Card>
 
         {/* Wallet address */}
-        <Card>
+        <Card className="p-4 sm:p-5">
           <Label>Wallet address ({form.network === 'trc20' ? 'TRC20' : 'BSC'} address)</Label>
           <Input required value={form.wallet_address}
             onChange={e => setForm({ ...form, wallet_address: e.target.value })}
@@ -170,11 +169,11 @@ export default function CreateOfferPage() {
         </Card>
 
         {/* Terms */}
-        <Card>
+        <Card className="p-4 sm:p-5">
           <Label>Additional terms (optional)</Label>
           <textarea value={form.terms} onChange={e => setForm({ ...form, terms: e.target.value })}
             placeholder="e.g. Reply within 10 minutes or trade will be cancelled"
-            className="w-full min-h-[80px] px-3 py-2 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+            className="w-full min-h-[80px] px-3 py-2 rounded-lg bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none text-sm" />
         </Card>
 
         <Button type="submit" loading={loading} size="lg" className="w-full">Create Offer</Button>

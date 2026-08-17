@@ -52,7 +52,7 @@ export default function App() {
                 <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
               </Routes>
             </main>
-            <footer className="border-t border-border py-6 text-center text-sm text-muted-foreground">
+            <footer className="border-t border-border py-4 sm:py-6 text-center text-xs sm:text-sm text-muted-foreground px-4">
               <p>Kwacha Escrow &mdash; Secure USDT P2P Trading for Malawi</p>
             </footer>
           </div>

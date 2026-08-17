@@ -27,9 +27,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <div className="text-center mb-8">
-        <h1 className="font-heading font-bold text-2xl">Welcome back</h1>
+    <div className="max-w-md mx-auto px-4 py-10 sm:py-16">
+      <div className="text-center mb-6 sm:mb-8">
+        <h1 className="font-heading font-bold text-xl sm:text-2xl">Welcome back</h1>
         <p className="text-sm text-muted-foreground mt-1">Sign in to your Kwacha Escrow account</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
