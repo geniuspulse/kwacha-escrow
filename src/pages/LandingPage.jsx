@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Shield, Lock, Zap, Users, TrendingUp, ArrowRight } from 'lucide-react'
+import { Shield, Lock, Zap, Users, TrendingUp, ArrowRight, FileCode } from 'lucide-react'
 
 export default function LandingPage() {
   return (
@@ -17,7 +17,7 @@ export default function LandingPage() {
             <span className="text-primary">No scams. No stress.</span>
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-8 px-2">
-            Buy and sell USDT peer-to-peer with escrow protection. Pay with mobile money, bank transfer, or cash. Your trades are secured from start to finish.
+            Buy and sell USDT peer-to-peer with smart contract escrow protection. Pay with mobile money, bank transfer, or cash. Funds are locked on-chain and released automatically.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link to="/register" className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity w-full sm:w-auto justify-center">
@@ -43,7 +43,7 @@ export default function LandingPage() {
           </div>
           <div className="text-center">
             <p className="text-2xl sm:text-3xl font-heading font-bold text-primary">100%</p>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Escrow protected</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">On-chain secured</p>
           </div>
           <div className="text-center">
             <p className="text-2xl sm:text-3xl font-heading font-bold text-primary">24/7</p>
@@ -58,9 +58,9 @@ export default function LandingPage() {
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-center mb-8 sm:mb-12">How escrow protects you</h2>
           <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
             {[
-              { num: '1', title: 'Seller deposits USDT', desc: 'When a trade starts, the seller sends USDT to the platform escrow wallet. The USDT is locked until the trade completes.' },
+              { num: '1', title: 'Seller locks USDT', desc: 'When a trade starts, the seller locks USDT in the smart contract. The funds are held by the contract, not by any person or platform.' },
               { num: '2', title: 'Buyer pays in Kwacha', desc: 'The buyer sends Kwacha to the seller via mobile money, bank transfer, or cash. Both parties confirm the payment.' },
-              { num: '3', title: 'USDT released', desc: 'Once payment is confirmed, the escrow releases USDT to the buyer wallet. If there is a dispute, our team steps in.' },
+              { num: '3', title: 'Contract releases', desc: 'Once payment is confirmed, the smart contract automatically sends USDT to the buyer. No manual processing, no delays.' },
             ].map((step) => (
               <div key={step.num} className="rounded-xl border border-border bg-card p-5 sm:p-6">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
@@ -80,10 +80,10 @@ export default function LandingPage() {
           <h2 className="font-heading font-bold text-2xl sm:text-3xl text-center mb-8 sm:mb-12">Built for Malawi</h2>
           <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
             {[
-              { icon: Shield, title: 'Escrow protection', desc: 'USDT is locked in escrow before any Kwacha changes hands. Neither party can run off with the funds.' },
+              { icon: FileCode, title: 'Smart contract escrow', desc: 'USDT is locked in a self-executing smart contract on BSC or Tron. No human can access the funds. The code is public and auditable.' },
               { icon: TrendingUp, title: 'Live market rates', desc: 'Sellers set their own rates. Browse offers and pick the best price for your trade size.' },
               { icon: Users, title: 'Reputation system', desc: 'Every trader has a public rating and trade history. Know who you are dealing with before you trade.' },
-              { icon: Lock, title: 'KYC verified', desc: 'All users verify their identity. This keeps scammers out and makes disputes resolvable.' },
+              { icon: Lock, title: 'Wallet-based security', desc: 'Connect MetaMask or TronLink. Your wallet, your keys. The platform never holds your private keys.' },
             ].map((f) => (
               <div key={f.title} className="flex items-start gap-4 rounded-xl border border-border bg-card p-5 sm:p-6">
                 <f.icon className="w-6 h-6 text-primary flex-shrink-0 mt-0.5" />
@@ -101,7 +101,7 @@ export default function LandingPage() {
       <section className="py-12 sm:py-20 px-4">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="font-heading font-bold text-2xl sm:text-3xl mb-4">Ready to trade?</h2>
-          <p className="text-muted-foreground mb-6 sm:mb-8">Join Kwacha Escrow and start trading USDT with confidence.</p>
+          <p className="text-muted-foreground mb-6 sm:mb-8">Join Kwacha Escrow and start trading USDT with smart contract protection.</p>
           <Link to="/register" className="inline-flex items-center gap-2 px-8 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">
             Create your account <ArrowRight className="w-4 h-4" />
           </Link>

@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import WalletConnect from '@/components/WalletConnect'
 import { Shield, LogOut, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 
@@ -31,6 +32,7 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
+          <WalletConnect />
           {user ? (
             <>
               <Link to="/dashboard" className="flex items-center gap-2 text-sm">
@@ -65,6 +67,11 @@ export default function Navbar() {
           {user && <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="block text-sm text-muted-foreground py-1">Dashboard</Link>}
           {user && <Link to="/profile" onClick={() => setMenuOpen(false)} className="block text-sm text-muted-foreground py-1">Profile</Link>}
           {profile?.role === 'admin' && <Link to="/admin" onClick={() => setMenuOpen(false)} className="block text-sm text-muted-foreground py-1">Admin</Link>}
+          
+          <div className="pt-3 border-t border-border">
+            <div className="mb-3"><WalletConnect /></div>
+          </div>
+          
           <div className="pt-3 border-t border-border">
             {user ? (
               <button onClick={handleSignOut} className="block text-sm text-destructive py-1">Sign out</button>

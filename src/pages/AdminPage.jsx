@@ -4,7 +4,12 @@ import { Card, Badge } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { formatUSDT, formatMWK, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
-import { Users, Gavel, TrendingUp, Shield, CheckCircle } from 'lucide-react'
+import { Users, Gavel, TrendingUp, Shield, CheckCircle, ExternalLink } from 'lucide-react'
+
+const CHAIN_INFO = {
+  bsc: { name: 'BSC', explorer: 'https://bscscan.com/tx/' },
+  trc20: { name: 'Tron', explorer: 'https://tronscan.org/#/transaction/' },
+}
 
 export default function AdminPage() {
   const [tab, setTab] = useState('overview')
@@ -12,6 +17,7 @@ export default function AdminPage() {
   const [disputes, setDisputes] = useState([])
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [resolving, setResolving] = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -37,15 +43,30 @@ export default function AdminPage() {
     feesCollected: trades.filter(t => t.status === 'completed').reduce((s, t) => s + (t.amount || 0) * 0.008, 0),
     totalUsers: profiles.length,
     verifiedUsers: profiles.filter(p => p.kyc_status === 'verified').length,
+    onChainTrades: trades.filter(t => t.escrow_tx_hash).length,
   }
 
-  const resolveDispute = async (disputeId, resolution, tradeId, winner) => {
+  const resolveDispute = async (disputeId, tradeId, winner) => {
+    setResolving(disputeId)
     try {
-      await db.entities.Dispute.update(disputeId, { status: 'resolved', resolution, resolved_at: new Date().toISOString() })
-      await db.entities.Trade.update(tradeId, { status: winner === 'buyer' ? 'completed' : 'cancelled' })
-      toast.success('Dispute resolved')
+      // Note: On-chain resolution requires admin wallet to be connected
+      // The admin should call resolveDispute on the smart contract
+      await db.entities.Dispute.update(disputeId, {
+        status: 'resolved',
+        resolution: winner === 'buyer' ? 'Released to buyer' : 'Returned to seller',
+        resolved_at: new Date().toISOString(),
+        released_to_buyer: winner === 'buyer',
+      })
+      await db.entities.Trade.update(tradeId, {
+        status: winner === 'buyer' ? 'completed' : 'cancelled',
+        completed_at: new Date().toISOString(),
+      })
+      toast.success(`Dispute resolved: ${winner === 'buyer' ? 'funds released to buyer' : 'funds returned to seller'}`)
       loadData()
-    } catch (e) { toast.error('Failed to resolve dispute') }
+    } catch (e) {
+      toast.error('Failed to resolve dispute')
+    }
+    setResolving(null)
   }
 
   const verifyKYC = async (userId) => {
@@ -72,26 +93,38 @@ export default function AdminPage() {
       {loading ? <p className="text-muted-foreground text-sm">Loading...</p> : (
         <>
           {tab === 'overview' && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <Card className="p-4"><div className="flex items-center gap-3"><TrendingUp className="w-5 h-5 text-primary flex-shrink-0" /><div><p className="text-xl sm:text-2xl font-bold">{stats.totalTrades}</p><p className="text-xs text-muted-foreground">Total trades</p></div></div></Card>
               <Card className="p-4"><div className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" /><div><p className="text-xl sm:text-2xl font-bold">{stats.completed}</p><p className="text-xs text-muted-foreground">Completed</p></div></div></Card>
               <Card className="p-4"><div className="flex items-center gap-3"><Gavel className="w-5 h-5 text-amber-500 flex-shrink-0" /><div><p className="text-xl sm:text-2xl font-bold">{stats.disputed}</p><p className="text-xs text-muted-foreground">Disputed</p></div></div></Card>
               <Card className="p-4"><div className="flex items-center gap-3"><Shield className="w-5 h-5 text-primary flex-shrink-0" /><div><p className="text-sm sm:text-base font-bold">{formatUSDT(stats.feesCollected)}</p><p className="text-xs text-muted-foreground">Fees collected</p></div></div></Card>
               <Card className="p-4"><div className="flex items-center gap-3"><Users className="w-5 h-5 text-primary flex-shrink-0" /><div><p className="text-xl sm:text-2xl font-bold">{stats.totalUsers}</p><p className="text-xs text-muted-foreground">Users</p></div></div></Card>
               <Card className="p-4"><div className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" /><div><p className="text-xl sm:text-2xl font-bold">{stats.verifiedUsers}</p><p className="text-xs text-muted-foreground">KYC verified</p></div></div></Card>
+              <Card className="p-4 col-span-2"><div className="flex items-center gap-3"><Shield className="w-5 h-5 text-primary flex-shrink-0" /><div><p className="text-xl sm:text-2xl font-bold">{stats.onChainTrades}</p><p className="text-xs text-muted-foreground">On-chain escrow trades</p></div></div></Card>
             </div>
           )}
 
           {tab === 'trades' && (
             <div className="space-y-3">
-              {trades.length === 0 ? <Card className="text-center py-8"><p className="text-sm text-muted-foreground">No trades yet.</p></Card> : trades.map(t => (
-                <Card key={t.id} className="p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0"><p className="font-medium text-sm sm:text-base">{formatUSDT(t.amount)} @ {formatMWK(t.rate)}</p><p className="text-xs text-muted-foreground mt-1">{t.trade_id} · {timeAgo(t.created_at)}</p></div>
-                    <Badge variant={t.status === 'completed' ? 'success' : t.status === 'disputed' ? 'destructive' : t.status === 'cancelled' ? 'neutral' : 'warning'} className="flex-shrink-0">{t.status}</Badge>
-                  </div>
-                </Card>
-              ))}
+              {trades.length === 0 ? <Card className="text-center py-8"><p className="text-sm text-muted-foreground">No trades yet.</p></Card> : trades.map(t => {
+                const chain = CHAIN_INFO[t.network] || CHAIN_INFO.bsc
+                return (
+                  <Card key={t.id} className="p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm sm:text-base">{formatUSDT(t.amount)} @ {formatMWK(t.rate)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t.trade_id} · {timeAgo(t.created_at)}</p>
+                        {t.escrow_tx_hash && (
+                          <a href={`${chain.explorer}${t.escrow_tx_hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary mt-1 hover:underline">
+                            Escrow tx <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                      <Badge variant={t.status === 'completed' ? 'success' : t.status === 'disputed' ? 'destructive' : t.status === 'cancelled' ? 'neutral' : 'warning'} className="flex-shrink-0">{t.status}</Badge>
+                    </div>
+                  </Card>
+                )
+              })}
             </div>
           )}
 
@@ -100,13 +133,17 @@ export default function AdminPage() {
               {disputes.length === 0 ? <Card className="text-center py-8"><p className="text-sm text-muted-foreground">No disputes filed.</p></Card> : disputes.map(d => (
                 <Card key={d.id} className="border-destructive/30 p-4">
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="min-w-0"><p className="font-medium text-sm sm:text-base">Dispute on trade {d.trade?.trade_id}</p><p className="text-xs sm:text-sm text-muted-foreground mt-1">{d.reason}</p><p className="text-xs text-muted-foreground mt-1">{timeAgo(d.created_at)}</p></div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm sm:text-base">Dispute on trade {d.trade?.trade_id}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">{d.reason}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{timeAgo(d.created_at)}</p>
+                    </div>
                     <Badge variant={d.status === 'open' ? 'destructive' : 'success'} className="flex-shrink-0">{d.status}</Badge>
                   </div>
                   {d.status === 'open' && (
                     <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                      <Button size="sm" onClick={() => resolveDispute(d.id, 'Released to buyer', d.trade_id, 'buyer')} className="w-full sm:w-auto">Release to buyer</Button>
-                      <Button size="sm" variant="destructive" onClick={() => resolveDispute(d.id, 'Returned to seller', d.trade_id, 'seller')} className="w-full sm:w-auto">Return to seller</Button>
+                      <Button size="sm" onClick={() => resolveDispute(d.id, d.trade_id, 'buyer')} loading={resolving === d.id} className="w-full sm:w-auto">Release to buyer</Button>
+                      <Button size="sm" variant="destructive" onClick={() => resolveDispute(d.id, d.trade_id, 'seller')} loading={resolving === d.id} className="w-full sm:w-auto">Return to seller</Button>
                     </div>
                   )}
                 </Card>

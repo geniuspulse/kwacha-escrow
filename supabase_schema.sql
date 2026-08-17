@@ -1,59 +1,92 @@
 -- Kwacha Escrow Database Schema
--- Run this in your Supabase SQL editor
+-- With smart contract escrow integration
 
--- Profiles table (extends auth.users)
+-- Profiles table
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT NOT NULL,
   phone TEXT,
+  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  kyc_status TEXT DEFAULT 'unverified' CHECK (kyc_status IN ('unverified', 'pending', 'verified', 'rejected')),
+  kyc_submitted_at TIMESTAMPTZ,
+  
+  -- Crypto wallets (user-provided)
   wallet_address_trc20 TEXT,
   wallet_address_bsc TEXT,
-  kyc_status TEXT NOT NULL DEFAULT 'unverified' CHECK (kyc_status IN ('unverified', 'pending', 'verified', 'rejected')),
-  reputation_score DECIMAL(3,2) DEFAULT 0,
-  total_trades INT DEFAULT 0,
-  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
-  is_banned BOOLEAN DEFAULT FALSE,
+  
+  -- Reputation
+  total_trades INTEGER DEFAULT 0,
+  completed_trades INTEGER DEFAULT 0,
+  reputation_score DECIMAL(3,2) DEFAULT 0.00,
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Offers table
+-- Offers table (sell/buy listings)
 CREATE TABLE IF NOT EXISTS offers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  seller_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  seller_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  
   type TEXT NOT NULL CHECK (type IN ('sell', 'buy')),
-  amount DECIMAL(18,2) NOT NULL,
-  rate DECIMAL(18,2) NOT NULL,
-  min_amount DECIMAL(18,2) DEFAULT 10,
-  max_amount DECIMAL(18,2),
-  payment_methods TEXT[] NOT NULL DEFAULT '{}',
+  amount DECIMAL(20,2) NOT NULL,
+  rate DECIMAL(20,2) NOT NULL, -- MWK per USDT
+  min_amount DECIMAL(20,2) DEFAULT 10,
+  max_amount DECIMAL(20,2),
+  
+  payment_methods JSONB DEFAULT '[]'::jsonb, -- ['airtel', 'mpamba', 'bank', 'cash']
   network TEXT NOT NULL CHECK (network IN ('trc20', 'bsc')),
-  wallet_address TEXT,
+  wallet_address TEXT NOT NULL, -- seller receiving wallet for the network
+  
   terms TEXT,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'cancelled')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'closed')),
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Trades table
+-- Trades table (actual transactions)
 CREATE TABLE IF NOT EXISTS trades (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  trade_id TEXT NOT NULL UNIQUE,
-  offer_id UUID NOT NULL REFERENCES offers(id) ON DELETE CASCADE,
-  buyer_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  seller_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  amount DECIMAL(18,2) NOT NULL,
-  rate DECIMAL(18,2) NOT NULL,
+  trade_id TEXT NOT NULL UNIQUE, -- human-readable: KE-XXXXX
+  
+  offer_id UUID REFERENCES offers(id) ON DELETE SET NULL,
+  seller_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  buyer_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  
+  amount DECIMAL(20,2) NOT NULL,
+  rate DECIMAL(20,2) NOT NULL,
+  total_mwk DECIMAL(20,2) GENERATED ALWAYS AS (amount * rate) STORED,
+  escrow_fee DECIMAL(20,2) GENERATED ALWAYS AS (amount * 0.008) STORED,
+  buyer_receives DECIMAL(20,2) GENERATED ALWAYS AS (amount - (amount * 0.008)) STORED,
+  
   network TEXT NOT NULL CHECK (network IN ('trc20', 'bsc')),
+  
+  -- Wallet addresses at time of trade
+  seller_wallet_address TEXT NOT NULL,
+  buyer_wallet_address TEXT NOT NULL,
+  
+  -- Smart contract fields
+  escrow_tx_hash TEXT, -- tx hash when seller locked USDT in contract
+  escrow_locked_at TIMESTAMPTZ,
+  payment_confirmed_tx TEXT, -- tx hash when buyer confirmed payment on-chain
+  payment_confirmed_at TIMESTAMPTZ,
+  release_tx_hash TEXT, -- tx hash when USDT released to buyer
+  completed_at TIMESTAMPTZ,
+  cancel_tx_hash TEXT, -- tx hash if trade cancelled (refund to seller)
+  dispute_tx_hash TEXT, -- tx hash if dispute raised on-chain
+  
+  -- Payment details
   payment_method TEXT,
-  escrow_address TEXT,
-  escrow_tx_hash TEXT,
-  release_tx_hash TEXT,
-  status TEXT NOT NULL DEFAULT 'created' CHECK (status IN (
-    'created', 'escrow_pending', 'payment_pending', 'payment_sent', 'confirming', 'completed', 'cancelled', 'disputed'
+  payment_reference TEXT, -- mobile money reference etc
+  
+  -- Status
+  status TEXT DEFAULT 'created' CHECK (status IN (
+    'created', 'escrow_pending', 'payment_pending', 'payment_sent',
+    'confirming', 'completed', 'cancelled', 'disputed'
   )),
-  payment_proof_url TEXT,
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -61,120 +94,89 @@ CREATE TABLE IF NOT EXISTS trades (
 -- Disputes table
 CREATE TABLE IF NOT EXISTS disputes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  trade_id UUID NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
-  raised_by UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  trade_id UUID REFERENCES trades(id) ON DELETE CASCADE,
+  raised_by UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  
   reason TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'investigating', 'resolved')),
+  evidence_urls JSONB DEFAULT '[]'::jsonb,
+  
+  -- Resolution
+  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'under_review', 'resolved', 'rejected')),
   resolution TEXT,
+  resolved_by UUID REFERENCES profiles(id),
   resolved_at TIMESTAMPTZ,
+  
+  -- On-chain resolution
+  resolution_tx_hash TEXT,
+  released_to_buyer BOOLEAN,
+  
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Reviews table
-CREATE TABLE IF NOT EXISTS reviews (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  trade_id UUID NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
-  reviewer_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  reviewee_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
-  comment TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_offers_status ON offers(status);
+CREATE INDEX IF NOT EXISTS idx_offers_seller ON offers(seller_id);
+CREATE INDEX IF NOT EXISTS idx_offers_network ON offers(network);
+CREATE INDEX IF NOT EXISTS idx_trades_seller ON trades(seller_id);
+CREATE INDEX IF NOT EXISTS idx_trades_buyer ON trades(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
+CREATE INDEX IF NOT EXISTS idx_trades_trade_id ON trades(trade_id);
+CREATE INDEX IF NOT EXISTS idx_disputes_trade ON disputes(trade_id);
+CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
 
--- Platform settings table
-CREATE TABLE IF NOT EXISTS platform_settings (
-  id INT PRIMARY KEY DEFAULT 1,
-  escrow_fee_percent DECIMAL(5,2) DEFAULT 0.80,
-  escrow_wallet_trc20 TEXT,
-  escrow_wallet_bsc TEXT,
-  min_trade_amount DECIMAL(18,2) DEFAULT 10,
-  max_trade_amount DECIMAL(18,2) DEFAULT 10000,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Insert default platform settings
-INSERT INTO platform_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
-
--- Enable Row Level Security
+-- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trades ENABLE ROW LEVEL SECURITY;
 ALTER TABLE disputes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
-ALTER TABLE platform_settings ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
--- Profiles: users can see all profiles (for reputation), update only their own
-CREATE POLICY "Profiles are visible to all" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Users update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+-- RLS Policies: users can see and edit their own data
+CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 
--- Offers: all authenticated users can see active offers, seller can manage own
-CREATE POLICY "Offers visible to authenticated users" ON offers FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Users create own offers" ON offers FOR INSERT TO authenticated WITH CHECK (auth.uid() = seller_id);
-CREATE POLICY "Users update own offers" ON offers FOR UPDATE TO authenticated USING (auth.uid() = seller_id);
-CREATE POLICY "Users delete own offers" ON offers FOR DELETE TO authenticated USING (auth.uid() = seller_id);
+CREATE POLICY "Anyone can view active offers" ON offers FOR SELECT USING (status = 'active' OR auth.uid() = seller_id);
+CREATE POLICY "Users can manage own offers" ON offers FOR ALL USING (auth.uid() = seller_id);
 
--- Trades: participants can see and update their trades
-CREATE POLICY "Trade participants can view" ON trades FOR SELECT TO authenticated USING (
-  auth.uid() = buyer_id OR auth.uid() = seller_id
-);
-CREATE POLICY "Trade participants can update" ON trades FOR UPDATE TO authenticated USING (
-  auth.uid() = buyer_id OR auth.uid() = seller_id
-);
-CREATE POLICY "Buyers can create trades" ON trades FOR INSERT TO authenticated WITH CHECK (
-  auth.uid() = buyer_id OR auth.uid() = seller_id
-);
+CREATE POLICY "Parties can view their trades" ON trades FOR SELECT USING (auth.uid() = seller_id OR auth.uid() = buyer_id);
+CREATE POLICY "Parties can update their trades" ON trades FOR UPDATE USING (auth.uid() = seller_id OR auth.uid() = buyer_id);
+CREATE POLICY "Buyers can create trades" ON trades FOR INSERT WITH CHECK (auth.uid() = buyer_id);
 
--- Disputes: trade participants can view and create disputes
-CREATE POLICY "Dispute participants can view" ON disputes FOR SELECT TO authenticated USING (
-  EXISTS (SELECT 1 FROM trades WHERE trades.id = disputes.trade_id AND (trades.buyer_id = auth.uid() OR trades.seller_id = auth.uid()))
+CREATE POLICY "Parties can view disputes" ON disputes FOR SELECT USING (
+  auth.uid() = raised_by OR 
+  auth.uid() IN (SELECT seller_id FROM trades WHERE id = trade_id) OR
+  auth.uid() IN (SELECT buyer_id FROM trades WHERE id = trade_id)
 );
-CREATE POLICY "Users can create disputes" ON disputes FOR INSERT TO authenticated WITH CHECK (auth.uid() = raised_by);
+CREATE POLICY "Parties can create disputes" ON disputes FOR INSERT WITH CHECK (auth.uid() = raised_by);
 
--- Reviews: trade participants can view, reviewer can create
-CREATE POLICY "Reviews visible to all" ON reviews FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Users create reviews" ON reviews FOR INSERT TO authenticated WITH CHECK (auth.uid() = reviewer_id);
-
--- Platform settings: visible to all, update by admin only
-CREATE POLICY "Settings visible to all" ON platform_settings FOR SELECT USING (true);
-
--- Admin policies (for admin role)
-CREATE POLICY "Admin can update profiles" ON profiles FOR UPDATE TO authenticated USING (
-  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
-);
-CREATE POLICY "Admin can update trades" ON trades FOR UPDATE TO authenticated USING (
-  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
-);
-CREATE POLICY "Admin can update disputes" ON disputes FOR UPDATE TO authenticated USING (
-  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
-);
-CREATE POLICY "Admin can update settings" ON platform_settings FOR UPDATE TO authenticated USING (
-  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
-);
-CREATE POLICY "Admin can view all trades" ON trades FOR SELECT TO authenticated USING (
-  buyer_id = auth.uid() OR seller_id = auth.uid() OR
-  EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
-);
-
--- Indexes
-CREATE INDEX idx_offers_status ON offers(status);
-CREATE INDEX idx_offers_seller ON offers(seller_id);
-CREATE INDEX idx_trades_buyer ON trades(buyer_id);
-CREATE INDEX idx_trades_seller ON trades(seller_id);
-CREATE INDEX idx_trades_status ON trades(status);
-CREATE INDEX idx_disputes_trade ON disputes(trade_id);
-CREATE INDEX idx_reviews_trade ON reviews(trade_id);
-CREATE INDEX idx_reviews_reviewee ON reviews(reviewee_id);
-
--- Auto-update updated_at
-CREATE OR REPLACE FUNCTION update_updated_at() RETURNS TRIGGER AS $$
-BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
+-- Trigger to update updated_at
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER offers_updated_at BEFORE UPDATE ON offers FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trades_updated_at BEFORE UPDATE ON trades FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER disputes_updated_at BEFORE UPDATE ON disputes FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER IF NOT EXISTS profiles_updated BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER IF NOT EXISTS offers_updated BEFORE UPDATE ON offers
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER IF NOT EXISTS trades_updated BEFORE UPDATE ON trades
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER IF NOT EXISTS disputes_updated BEFORE UPDATE ON disputes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Trigger to auto-create profile on signup
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO profiles (id, email, full_name)
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'full_name', 'New User'));
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER IF NOT EXISTS on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
