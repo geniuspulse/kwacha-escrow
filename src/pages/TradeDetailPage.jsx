@@ -63,7 +63,7 @@ export default function TradeDetailPage() {
   const chainInfo = CHAIN_INFO[network] || CHAIN_INFO.bsc
   const walletConnected = !!getWalletForNetwork(network)
 
-  // Dual fee: seller pays 0.4% on top, buyer pays 0.4% from received
+  // Dual fee: seller pays 1% on top, buyer pays 1% from received
   const fees = calculateFees(trade.amount)
 
   const updateStatus = async (newStatus, extra = {}) => {
@@ -86,7 +86,7 @@ export default function TradeDetailPage() {
         escrow_locked_at: new Date().toISOString(),
         seller_deposit_amount: result.totalLocked,
       })
-      toast.success(`USDT locked. You deposited ${formatUSDT(fees.sellerDeposit)} (trade + 0.4% seller fee).`)
+      toast.success(`USDT locked. You deposited ${formatUSDT(fees.sellerDeposit)} (trade + 1% seller fee).`)
     } catch (err) { toast.error(err.shortMessage || err.message || 'Failed to lock escrow') }
     setActionLoading(false)
   }
@@ -195,7 +195,7 @@ export default function TradeDetailPage() {
           <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm sm:text-base">Smart Contract Escrow</p>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Both parties pay a 0.4% fee (0.8% total). The seller adds their fee on top of the trade amount. The buyer's fee is deducted from the received USDT. All handled by the smart contract.</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Both parties pay a 1% fee (2% total). The seller adds their fee on top of the trade amount. The buyer's fee is deducted from the received USDT. All handled by the smart contract.</p>
           </div>
         </div>
 
@@ -214,7 +214,7 @@ export default function TradeDetailPage() {
           <div className="rounded-lg bg-secondary p-3 border border-primary/20">
             <p className="text-xs text-muted-foreground mb-1">Platform collects</p>
             <p className="font-semibold text-primary text-sm sm:text-base">{formatUSDT(fees.totalFees)}</p>
-            <p className="text-xs text-muted-foreground mt-1">0.4% seller + 0.4% buyer</p>
+            <p className="text-xs text-muted-foreground mt-1">1% seller + 1% buyer</p>
           </div>
         </div>
 
@@ -286,7 +286,7 @@ export default function TradeDetailPage() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Lock USDT in smart contract</p>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  You deposit {formatUSDT(fees.sellerDeposit)} ({formatUSDT(trade.amount)} trade + {formatUSDT(fees.sellerFee)} seller fee at 0.4%). The buyer will receive {formatUSDT(fees.buyerReceives)} (their 0.4% fee is deducted from the trade amount). If cancelled, your full deposit of {formatUSDT(fees.sellerDeposit)} is returned.
+                  You deposit {formatUSDT(fees.sellerDeposit)} ({formatUSDT(trade.amount)} trade + {formatUSDT(fees.sellerFee)} seller fee at 1%). The buyer will receive {formatUSDT(fees.buyerReceives)} (their 1% fee is deducted from the trade amount). If cancelled, your full deposit of {formatUSDT(fees.sellerDeposit)} is returned.
                 </p>
               </div>
             </div>
@@ -304,7 +304,7 @@ export default function TradeDetailPage() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Pay the seller</p>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Send {formatMWK(trade.amount * trade.rate)} to the seller. USDT is locked in escrow. On release you will receive {formatUSDT(fees.buyerReceives)} — the trade amount minus your 0.4% buyer fee ({formatUSDT(fees.buyerFee)}).
+                  Send {formatMWK(trade.amount * trade.rate)} to the seller. USDT is locked in escrow. On release you will receive {formatUSDT(fees.buyerReceives)} — the trade amount minus your 1% buyer fee ({formatUSDT(fees.buyerFee)}).
                 </p>
               </div>
             </div>
@@ -320,7 +320,7 @@ export default function TradeDetailPage() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Confirm payment and release USDT</p>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Verify receipt of {formatMWK(trade.amount * trade.rate)}. The contract sends {formatUSDT(fees.buyerReceives)} to the buyer and {formatUSDT(fees.totalFees)} to the platform wallet (your 0.4% + buyer's 0.4%).
+                  Verify receipt of {formatMWK(trade.amount * trade.rate)}. The contract sends {formatUSDT(fees.buyerReceives)} to the buyer and {formatUSDT(fees.totalFees)} to the platform wallet (your 1% + buyer's 1%).
                 </p>
               </div>
             </div>
@@ -338,7 +338,7 @@ export default function TradeDetailPage() {
               <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
               <div>
                 <p className="font-medium text-emerald-500 text-sm sm:text-base">Trade completed</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Buyer received {formatUSDT(fees.buyerReceives)}. Platform collected {formatUSDT(fees.totalFees)} in fees (0.4% seller + 0.4% buyer).</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Buyer received {formatUSDT(fees.buyerReceives)}. Platform collected {formatUSDT(fees.totalFees)} in fees (1% seller + 1% buyer).</p>
               </div>
             </div>
           </Card>

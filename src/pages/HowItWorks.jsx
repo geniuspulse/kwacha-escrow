@@ -25,7 +25,7 @@ export default function HowItWorks() {
               ['1. Find a sell offer', 'Browse the marketplace and find someone selling USDT at a rate you are happy with. Check their reputation and trade history.'],
               ['2. Start the trade', 'Enter how much USDT you want to buy and provide your wallet address. The seller locks their USDT in the smart contract escrow.'],
               ['3. Pay the seller in Kwacha', 'Send Kwacha to the seller via mobile money, bank transfer, or cash. Confirm the payment on the platform.'],
-              ['4. Receive your USDT', 'Once the seller confirms they received your Kwacha, the smart contract automatically releases USDT to your wallet. Both parties pay a 0.4% fee (0.8% total). Your 0.4% fee is deducted from the USDT you receive.'],
+              ['4. Receive your USDT', 'Once the seller confirms they received your Kwacha, the smart contract automatically releases USDT to your wallet. Both parties pay a 1% fee (2% total). Your 1% fee is deducted from the USDT you receive.'],
             ].map(([title, desc]) => (
               <div key={title} className="rounded-xl border border-border bg-card p-4 sm:p-5">
                 <h3 className="font-medium mb-1 text-sm sm:text-base">{title}</h3>
@@ -42,7 +42,7 @@ export default function HowItWorks() {
               ['1. Create a sell offer', 'Set your USDT amount, rate in Kwacha, and accepted payment methods. Your offer appears on the marketplace.'],
               ['2. Lock USDT in smart contract', 'When a buyer starts a trade, approve and lock your USDT in the escrow smart contract. The funds are held by the contract, not by any person.'],
               ['3. Receive Kwacha', 'The buyer sends you Kwacha via your preferred method. Confirm receipt on the platform.'],
-              ['4. Smart contract releases', 'Once you confirm payment, the smart contract sends USDT directly to the buyer wallet. Your 0.4% fee is added to your deposit on top of the trade amount. The buyers 0.4% is deducted from the received USDT.'],
+              ['4. Smart contract releases', 'Once you confirm payment, the smart contract sends USDT directly to the buyer wallet. Your 1% fee is added to your deposit on top of the trade amount. The buyers 1% is deducted from the received USDT.'],
             ].map(([title, desc]) => (
               <div key={title} className="rounded-xl border border-border bg-card p-4 sm:p-5">
                 <h3 className="font-medium mb-1 text-sm sm:text-base">{title}</h3>
@@ -77,7 +77,7 @@ export default function HowItWorks() {
         <section>
           <h2 className="font-heading font-semibold text-lg sm:text-xl mb-3 sm:mb-4 text-primary">Fees</h2>
           <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-            <p className="text-xs sm:text-sm text-muted-foreground">The escrow fee is 0.8% of the trade amount, split between both parties: seller pays 0.4% on top of the trade amount, buyer pays 0.4% deducted from received USDT. Total 0.8%. Collected by the smart contract automatically. No hidden charges, no subscription. You only pay when a trade completes.</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">The escrow fee is 2% of the trade amount, split between both parties: seller pays 1% on top of the trade amount, buyer pays 1% deducted from received USDT. Total 2%. Collected by the smart contract automatically. No hidden charges, no subscription. You only pay when a trade completes.</p>
           </div>
         </section>
       </div>

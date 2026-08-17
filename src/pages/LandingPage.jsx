@@ -34,8 +34,8 @@ export default function LandingPage() {
       <section className="border-y border-border py-8 sm:py-12 px-4">
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
           <div className="text-center">
-            <p className="text-2xl sm:text-3xl font-heading font-bold text-primary">0.8%</p>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Escrow fee (0.4% each)</p>
+            <p className="text-2xl sm:text-3xl font-heading font-bold text-primary">2%</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Escrow fee (1% each)</p>
           </div>
           <div className="text-center">
             <p className="text-2xl sm:text-3xl font-heading font-bold text-primary">2</p>

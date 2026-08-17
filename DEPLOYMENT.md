@@ -14,7 +14,7 @@
 5. Deploy with constructor args:
    - `_usdtAddress`: `0x55d398326f99059fF775485246999027B3197955` (BSC USDT)
    - `_feeWallet`: Your platform fee collection wallet address
-   - `_feeBps`: `80` (0.8% = 80 basis points)
+   - `_feeBps`: `100` (1% = 100 basis points)
 6. Copy the deployed contract address
 7. Set `VITE_ESCROW_CONTRACT_BSC` in your .env
 

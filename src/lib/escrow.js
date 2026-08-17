@@ -31,10 +31,10 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ]
 
-// Fee configuration: 0.4% each, 0.8% total
-const SELLER_FEE_BPS = 40  // 0.4%
-const BUYER_FEE_BPS = 40   // 0.4%
-const TOTAL_FEE_BPS = SELLER_FEE_BPS + BUYER_FEE_BPS // 0.8%
+// Fee configuration: 1.0% each, 2.0% total
+const SELLER_FEE_BPS = 100 // 1.0%
+const BUYER_FEE_BPS = 100  // 1.0%
+const TOTAL_FEE_BPS = SELLER_FEE_BPS + BUYER_FEE_BPS // 2.0%
 
 const ESCROW_CONTRACTS = {
   bsc: import.meta.env.VITE_ESCROW_CONTRACT_BSC || '',
