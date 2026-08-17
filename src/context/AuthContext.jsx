@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { supabase, db } from '@/api/supabaseClient'
+import { supabase, isSupabaseConfigured, db } from '@/api/supabaseClient'
 
 const AuthContext = createContext(null)
 
@@ -24,6 +24,10 @@ export function AuthProvider({ children }) {
   }, [user, fetchProfile])
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false)
+      return
+    }
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user)
@@ -58,18 +62,21 @@ export function AuthProvider({ children }) {
       options: { data: { full_name, phone } },
     })
     if (error) throw error
-    // Create profile
     if (data.user) {
-      await db.entities.Profile.create({
-        id: data.user.id,
-        email,
-        full_name,
-        phone,
-        kyc_status: 'unverified',
-        reputation_score: 0,
-        total_trades: 0,
-        is_banned: false,
-      })
+      try {
+        await db.entities.Profile.create({
+          id: data.user.id,
+          email,
+          full_name,
+          phone,
+          kyc_status: 'unverified',
+          reputation_score: 0,
+          total_trades: 0,
+          is_banned: false,
+        })
+      } catch (e) {
+        // Profile might already exist or RLS might prevent it
+      }
     }
     return data
   }
