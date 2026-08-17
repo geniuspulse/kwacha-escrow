@@ -5,12 +5,12 @@ import { formatUSDT, formatMWK, timeAgo } from '@/lib/utils'
 import { Badge } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
-import { Search, ArrowRight, Wallet, Smartphone, Banknote, BankBuilding } from 'lucide-react'
+import { Search, ArrowRight, Wallet, Smartphone, Banknote, Building2 } from 'lucide-react'
 
 const PAYMENT_METHODS = {
   airtel: { label: 'Airtel Money', icon: Smartphone },
   mpamba: { label: 'TNM Mpamba', icon: Smartphone },
-  bank: { label: 'Bank Transfer', icon: BankBuilding },
+  bank: { label: 'Bank Transfer', icon: Building2 },
   cash: { label: 'Cash in Person', icon: Banknote },
 }
 
