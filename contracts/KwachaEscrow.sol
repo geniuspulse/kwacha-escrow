@@ -10,16 +10,16 @@ interface IERC20 {
 
 /**
  * KwachaEscrow - P2P USDT escrow for Kwacha Escrow platform
- * 
+ * Seller pays the escrow fee. Buyer receives the full trade amount.
+ *
  * Flow:
- * 1. Seller creates escrow with tradeId, buyer address, USDT amount
- *    -> USDT transferred from seller to this contract
- * 2. Buyer confirms fiat payment sent (off-chain: mobile money, bank, cash)
- * 3. Seller confirms fiat received -> releases USDT to buyer
- *    -> Platform fee sent to fee wallet, rest to buyer
- * 4. Either party can cancel before payment confirmation
- *    -> USDT returned to seller
- * 5. Admin can resolve disputes -> release to buyer or refund to seller
+ * 1. Seller creates escrow with tradeId, buyer address, trade amount
+ *    -> Contract pulls tradeAmount + feeAmount from seller
+ * 2. Buyer confirms fiat payment sent (off-chain)
+ * 3. Seller confirms fiat received -> releases
+ *    -> Buyer receives full tradeAmount, platform receives feeAmount
+ * 4. Cancel before payment -> seller gets full deposit back (amount + fee)
+ * 5. Admin resolves disputes
  */
 contract KwachaEscrow {
     IERC20 public immutable usdt;
@@ -40,44 +40,29 @@ contract KwachaEscrow {
     struct Escrow {
         address seller;
         address buyer;
-        uint256 amount;       // total USDT locked
-        uint256 feeAmount;     // platform fee
+        uint256 tradeAmount;   // what buyer receives
+        uint256 feeAmount;      // platform fee (paid by seller)
+        uint256 totalLocked;    // tradeAmount + feeAmount (what seller deposited)
         Status status;
         uint256 createdAt;
     }
     
     mapping(bytes32 => Escrow) public escrows;
     
-    // Events for off-chain indexing
-    event EscrowCreated(bytes32 indexed tradeId, address indexed seller, address indexed buyer, uint256 amount, uint256 feeAmount);
+    event EscrowCreated(bytes32 indexed tradeId, address indexed seller, address indexed buyer, uint256 tradeAmount, uint256 feeAmount, uint256 totalLocked);
     event PaymentConfirmed(bytes32 indexed tradeId, address indexed buyer);
-    event EscrowReleased(bytes32 indexed tradeId, address indexed buyer, uint256 amountReleased, uint256 feeAmount);
+    event EscrowReleased(bytes32 indexed tradeId, address indexed buyer, uint256 amountToBuyer, uint256 feeAmount);
     event EscrowCancelled(bytes32 indexed tradeId, address indexed seller, uint256 refundAmount);
     event DisputeRaised(bytes32 indexed tradeId, address indexed raisedBy);
     event DisputeResolved(bytes32 indexed tradeId, bool releasedToBuyer);
     event FeeUpdated(uint256 newBps);
     event AdminUpdated(address newAdmin);
     
-    modifier onlyAdmin() {
-        require(msg.sender == platformAdmin, "Not admin");
-        _;
-    }
-    
-    modifier onlySeller(bytes32 tradeId) {
-        require(escrows[tradeId].seller == msg.sender, "Not seller");
-        _;
-    }
-    
-    modifier onlyBuyer(bytes32 tradeId) {
-        require(escrows[tradeId].buyer == msg.sender, "Not buyer");
-        _;
-    }
-    
+    modifier onlyAdmin() { require(msg.sender == platformAdmin, "Not admin"); _; }
+    modifier onlySeller(bytes32 tradeId) { require(escrows[tradeId].seller == msg.sender, "Not seller"); _; }
+    modifier onlyBuyer(bytes32 tradeId) { require(escrows[tradeId].buyer == msg.sender, "Not buyer"); _; }
     modifier onlyParty(bytes32 tradeId) {
-        require(
-            escrows[tradeId].seller == msg.sender || escrows[tradeId].buyer == msg.sender,
-            "Not a trade party"
-        );
+        require(escrows[tradeId].seller == msg.sender || escrows[tradeId].buyer == msg.sender, "Not a trade party");
         _;
     }
     
@@ -89,104 +74,88 @@ contract KwachaEscrow {
     }
     
     /**
-     * @dev Seller creates escrow. USDT is transferred from seller to this contract.
-     * @param tradeId Unique trade identifier (keccak256 of off-chain trade ID)
+     * @dev Seller creates escrow. Contract pulls tradeAmount + fee from seller.
+     * @param tradeId Unique trade identifier
      * @param buyer Buyer wallet address
-     * @param amount USDT amount in smallest unit (handle decimals off-chain)
+     * @param tradeAmount USDT the buyer will receive (seller pays fee on top)
      */
     function createEscrow(
         bytes32 tradeId,
         address buyer,
-        uint256 amount
+        uint256 tradeAmount
     ) external {
         require(escrows[tradeId].status == Status.Nonexistent, "Trade already exists");
         require(buyer != address(0), "Invalid buyer address");
-        require(amount > 0, "Amount must be positive");
+        require(tradeAmount > 0, "Amount must be positive");
         
-        uint256 feeAmount = (amount * feeBps) / 10000;
+        uint256 feeAmount = (tradeAmount * feeBps) / 10000;
+        uint256 totalLocked = tradeAmount + feeAmount;
         
-        // Transfer USDT from seller to this contract
+        // Pull trade amount + fee from seller
         require(
-            usdt.transferFrom(msg.sender, address(this), amount),
-            "USDT transfer failed - check approval"
+            usdt.transferFrom(msg.sender, address(this), totalLocked),
+            "USDT transfer failed - check approval and balance"
         );
         
         escrows[tradeId] = Escrow({
             seller: msg.sender,
             buyer: buyer,
-            amount: amount,
+            tradeAmount: tradeAmount,
             feeAmount: feeAmount,
+            totalLocked: totalLocked,
             status: Status.Created,
             createdAt: block.timestamp
         });
         
-        emit EscrowCreated(tradeId, msg.sender, buyer, amount, feeAmount);
+        emit EscrowCreated(tradeId, msg.sender, buyer, tradeAmount, feeAmount, totalLocked);
     }
     
-    /**
-     * @dev Buyer confirms they sent fiat payment to seller (off-chain)
-     */
     function confirmPayment(bytes32 tradeId) external onlyBuyer(tradeId) {
         require(escrows[tradeId].status == Status.Created, "Trade not in Created state");
-        
         escrows[tradeId].status = Status.PaymentConfirmed;
         emit PaymentConfirmed(tradeId, msg.sender);
     }
     
-    /**
-     * @dev Seller confirms fiat received, releases USDT to buyer
-     */
     function releaseFunds(bytes32 tradeId) external onlySeller(tradeId) {
         Escrow storage e = escrows[tradeId];
         require(e.status == Status.PaymentConfirmed, "Payment not confirmed yet");
         
         e.status = Status.Released;
         
-        uint256 buyerAmount = e.amount - e.feeAmount;
+        // Buyer receives full trade amount
+        require(usdt.transfer(e.buyer, e.tradeAmount), "Buyer transfer failed");
         
-        // Send fee to platform wallet
+        // Platform receives fee
         if (e.feeAmount > 0) {
             require(usdt.transfer(feeWallet, e.feeAmount), "Fee transfer failed");
         }
         
-        // Send remainder to buyer
-        require(usdt.transfer(e.buyer, buyerAmount), "Buyer transfer failed");
-        
-        emit EscrowReleased(tradeId, e.buyer, buyerAmount, e.feeAmount);
+        emit EscrowReleased(tradeId, e.buyer, e.tradeAmount, e.feeAmount);
     }
     
-    /**
-     * @dev Either party cancels trade before payment confirmation
-     */
     function cancelTrade(bytes32 tradeId) external onlyParty(tradeId) {
         Escrow storage e = escrows[tradeId];
         require(e.status == Status.Created, "Can only cancel before payment");
         
         e.status = Status.Cancelled;
         
-        // Return USDT to seller
-        require(usdt.transfer(e.seller, e.amount), "Refund failed");
+        // Return full deposit to seller (trade amount + fee)
+        require(usdt.transfer(e.seller, e.totalLocked), "Refund failed");
         
-        emit EscrowCancelled(tradeId, e.seller, e.amount);
+        emit EscrowCancelled(tradeId, e.seller, e.totalLocked);
     }
     
-    /**
-     * @dev Either party raises a dispute
-     */
     function raiseDispute(bytes32 tradeId) external onlyParty(tradeId) {
         Escrow storage e = escrows[tradeId];
-        require(
-            e.status == Status.Created || e.status == Status.PaymentConfirmed,
-            "Cannot dispute in current state"
-        );
-        
+        require(e.status == Status.Created || e.status == Status.PaymentConfirmed, "Cannot dispute");
         e.status = Status.Disputed;
         emit DisputeRaised(tradeId, msg.sender);
     }
     
     /**
      * @dev Admin resolves dispute
-     * @param releaseToBuyer true = send USDT to buyer, false = refund to seller
+     * @param releaseToBuyer true = buyer gets tradeAmount, platform gets fee
+     *                       false = seller gets full refund (amount + fee)
      */
     function resolveDispute(bytes32 tradeId, bool releaseToBuyer) external onlyAdmin {
         Escrow storage e = escrows[tradeId];
@@ -195,55 +164,38 @@ contract KwachaEscrow {
         e.status = Status.Released;
         
         if (releaseToBuyer) {
-            uint256 buyerAmount = e.amount - e.feeAmount;
+            require(usdt.transfer(e.buyer, e.tradeAmount), "Buyer transfer failed");
             if (e.feeAmount > 0) {
                 require(usdt.transfer(feeWallet, e.feeAmount), "Fee transfer failed");
             }
-            require(usdt.transfer(e.buyer, buyerAmount), "Buyer transfer failed");
         } else {
-            // Refund to seller, no fee
-            require(usdt.transfer(e.seller, e.amount), "Refund failed");
+            require(usdt.transfer(e.seller, e.totalLocked), "Refund failed");
         }
         
         emit DisputeResolved(tradeId, releaseToBuyer);
     }
     
-    /**
-     * @dev Get escrow details
-     */
     function getEscrow(bytes32 tradeId) external view returns (
-        address seller,
-        address buyer,
-        uint256 amount,
-        uint256 feeAmount,
-        Status status,
-        uint256 createdAt
+        address seller, address buyer,
+        uint256 tradeAmount, uint256 feeAmount, uint256 totalLocked,
+        Status status, uint256 createdAt
     ) {
         Escrow storage e = escrows[tradeId];
-        return (e.seller, e.buyer, e.amount, e.feeAmount, e.status, e.createdAt);
+        return (e.seller, e.buyer, e.tradeAmount, e.feeAmount, e.totalLocked, e.status, e.createdAt);
     }
     
-    /**
-     * @dev Update fee (admin only)
-     */
     function setFee(uint256 newBps) external onlyAdmin {
         require(newBps <= 500, "Fee cannot exceed 5%");
         feeBps = newBps;
         emit FeeUpdated(newBps);
     }
     
-    /**
-     * @dev Update admin (admin only)
-     */
     function setAdmin(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "Invalid address");
         platformAdmin = newAdmin;
         emit AdminUpdated(newAdmin);
     }
     
-    /**
-     * @dev Update fee wallet (admin only)
-     */
     function setFeeWallet(address newWallet) external onlyAdmin {
         require(newWallet != address(0), "Invalid address");
         feeWallet = newWallet;
