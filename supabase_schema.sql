@@ -47,9 +47,11 @@ CREATE TABLE IF NOT EXISTS trades (
   total_mwk DECIMAL(20,2) GENERATED ALWAYS AS (amount * rate) STORED,
   
   -- Seller pays fee on top of trade amount
-  escrow_fee DECIMAL(20,2) GENERATED ALWAYS AS (amount * 0.008) STORED,
-  seller_deposit DECIMAL(20,2) GENERATED ALWAYS AS (amount + (amount * 0.008)) STORED,
-  buyer_receives DECIMAL(20,2) GENERATED ALWAYS AS (amount) STORED,  -- full amount, no deduction
+  seller_fee DECIMAL(20,2) GENERATED ALWAYS AS (amount * 0.004) STORED,
+  buyer_fee DECIMAL(20,2) GENERATED ALWAYS AS (amount * 0.004) STORED,
+  total_fees DECIMAL(20,2) GENERATED ALWAYS AS (amount * 0.008) STORED,
+  seller_deposit DECIMAL(20,2) GENERATED ALWAYS AS (amount + (amount * 0.004)) STORED,
+  buyer_receives DECIMAL(20,2) GENERATED ALWAYS AS (amount - (amount * 0.004)) STORED,  -- trade amount minus buyer fee
   
   network TEXT NOT NULL CHECK (network IN ('trc20', 'bsc')),
   seller_wallet_address TEXT NOT NULL,

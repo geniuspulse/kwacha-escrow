@@ -13,11 +13,12 @@ const ESCROW_ABI = [
   'function cancelTrade(bytes32 tradeId) external',
   'function raiseDispute(bytes32 tradeId) external',
   'function resolveDispute(bytes32 tradeId, bool releaseToBuyer) external',
-  'function getEscrow(bytes32 tradeId) view returns (address seller, address buyer, uint256 tradeAmount, uint256 feeAmount, uint256 totalLocked, uint8 status, uint256 createdAt)',
-  'function feeBps() view returns (uint256)',
-  'event EscrowCreated(bytes32 indexed tradeId, address indexed seller, address indexed buyer, uint256 tradeAmount, uint256 feeAmount, uint256 totalLocked)',
+  'function getEscrow(bytes32 tradeId) view returns (address seller, address buyer, uint256 tradeAmount, uint256 sellerFee, uint256 buyerFee, uint256 totalLocked, uint8 status, uint256 createdAt)',
+  'function sellerFeeBps() view returns (uint256)',
+  'function buyerFeeBps() view returns (uint256)',
+  'event EscrowCreated(bytes32 indexed tradeId, address indexed seller, address indexed buyer, uint256 tradeAmount, uint256 sellerFee, uint256 buyerFee, uint256 totalLocked)',
   'event PaymentConfirmed(bytes32 indexed tradeId, address indexed buyer)',
-  'event EscrowReleased(bytes32 indexed tradeId, address indexed buyer, uint256 amountToBuyer, uint256 feeAmount)',
+  'event EscrowReleased(bytes32 indexed tradeId, address indexed buyer, uint256 amountToBuyer, uint256 totalFees)',
   'event EscrowCancelled(bytes32 indexed tradeId, address indexed seller, uint256 refundAmount)',
   'event DisputeRaised(bytes32 indexed tradeId, address indexed raisedBy)',
   'event DisputeResolved(bytes32 indexed tradeId, bool releasedToBuyer)',
@@ -30,7 +31,10 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ]
 
-const FEE_BPS = 80 // 0.8%
+// Fee configuration: 0.4% each, 0.8% total
+const SELLER_FEE_BPS = 40  // 0.4%
+const BUYER_FEE_BPS = 40   // 0.4%
+const TOTAL_FEE_BPS = SELLER_FEE_BPS + BUYER_FEE_BPS // 0.8%
 
 const ESCROW_CONTRACTS = {
   bsc: import.meta.env.VITE_ESCROW_CONTRACT_BSC || '',
@@ -43,11 +47,19 @@ export function tradeIdToBytes32(tradeId) {
   return ethers.id(tradeId)
 }
 
-// Calculate fee and total the seller must deposit
+// Calculate fees for both parties
+export function calculateFees(tradeAmount) {
+  const sellerFee = tradeAmount * (SELLER_FEE_BPS / 10000)
+  const buyerFee = tradeAmount * (BUYER_FEE_BPS / 10000)
+  const totalFees = sellerFee + buyerFee
+  const sellerDeposit = tradeAmount + sellerFee  // what seller locks
+  const buyerReceives = tradeAmount - buyerFee   // what buyer gets
+  return { sellerFee, buyerFee, totalFees, sellerDeposit, buyerReceives }
+}
+
+// Keep backward-compat name
 export function calculateSellerCost(tradeAmount) {
-  const fee = tradeAmount * (FEE_BPS / 10000)
-  const total = tradeAmount + fee
-  return { fee, total }
+  return calculateFees(tradeAmount)
 }
 
 // --- BSC ---
@@ -73,15 +85,14 @@ export async function bscCreateEscrow(tradeId, buyerAddress, tradeAmount) {
   const contract = getBscContract(signer)
   
   const decimals = await usdt.decimals()
-  const { total } = calculateSellerCost(tradeAmount)
-  const totalWei = ethers.parseUnits(String(total), decimals)
+  const { sellerDeposit } = calculateFees(tradeAmount)
+  const depositWei = ethers.parseUnits(String(sellerDeposit), decimals)
   const tradeIdHash = tradeIdToBytes32(tradeId)
   
-  // Approve the total (trade amount + fee)
   const allowance = await usdt.allowance(await signer.getAddress(), ESCROW_CONTRACTS.bsc)
-  if (allowance < totalWei) {
-    toast.info('Approving USDT (trade amount + fee)...')
-    const approveTx = await usdt.approve(ESCROW_CONTRACTS.bsc, totalWei)
+  if (allowance < depositWei) {
+    toast.info('Approving USDT (trade amount + seller fee)...')
+    const approveTx = await usdt.approve(ESCROW_CONTRACTS.bsc, depositWei)
     await approveTx.wait()
   }
   
@@ -89,7 +100,7 @@ export async function bscCreateEscrow(tradeId, buyerAddress, tradeAmount) {
   const tx = await contract.createEscrow(tradeIdHash, buyerAddress, ethers.parseUnits(String(tradeAmount), decimals))
   const receipt = await tx.wait()
   
-  return { txHash: receipt.hash, network: 'bsc', totalLocked: total }
+  return { txHash: receipt.hash, network: 'bsc', totalLocked: sellerDeposit }
 }
 
 export async function bscConfirmPayment(tradeId) {
@@ -124,21 +135,6 @@ export async function bscRaiseDispute(tradeId) {
   return { txHash: receipt.hash }
 }
 
-export async function bscGetEscrow(tradeId) {
-  const provider = new ethers.BrowserProvider(window.ethereum)
-  const contract = getBscContract(provider)
-  const result = await contract.getEscrow(tradeIdToBytes32(tradeId))
-  return {
-    seller: result[0],
-    buyer: result[1],
-    tradeAmount: ethers.formatUnits(result[2], 18),
-    feeAmount: ethers.formatUnits(result[3], 18),
-    totalLocked: ethers.formatUnits(result[4], 18),
-    status: Number(result[5]),
-    createdAt: Number(result[6]),
-  }
-}
-
 // --- TRC20 ---
 
 export function getTronWeb() {
@@ -157,20 +153,20 @@ export async function trc20CreateEscrow(tradeId, buyerAddress, tradeAmount) {
   const usdtContract = await tronWeb.contract(ERC20_ABI, USDT_ADDRESSES.trc20)
   const escrowContract = await getTrc20Contract()
   
-  const { total } = calculateSellerCost(tradeAmount)
-  const totalSun = tronWeb.toSun(String(total))
+  const { sellerDeposit } = calculateFees(tradeAmount)
+  const depositSun = tronWeb.toSun(String(sellerDeposit))
   const tradeIdHash = tradeIdToBytes32(tradeId)
   
   const allowance = await usdtContract.allowance(tronWeb.defaultAddress, ESCROW_CONTRACTS.trc20).call()
-  if (parseInt(allowance) < parseInt(totalSun)) {
-    toast.info('Approving USDT (trade amount + fee)...')
-    await usdtContract.approve(ESCROW_CONTRACTS.trc20, totalSun).send()
+  if (parseInt(allowance) < parseInt(depositSun)) {
+    toast.info('Approving USDT (trade amount + seller fee)...')
+    await usdtContract.approve(ESCROW_CONTRACTS.trc20, depositSun).send()
   }
   
   toast.info('Locking USDT in escrow...')
   const tx = await escrowContract.createEscrow(tradeIdHash, buyerAddress, tronWeb.toSun(String(tradeAmount))).send()
   
-  return { txHash: tx, network: 'trc20', totalLocked: total }
+  return { txHash: tx, network: 'trc20', totalLocked: sellerDeposit }
 }
 
 export async function trc20ConfirmPayment(tradeId) {

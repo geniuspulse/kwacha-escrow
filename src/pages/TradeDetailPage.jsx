@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { toast } from 'sonner'
 import { formatUSDT, formatMWK, timeAgo, truncateAddress } from '@/lib/utils'
 import * as escrow from '@/lib/escrow'
-import { calculateSellerCost } from '@/lib/escrow'
+import { calculateFees } from '@/lib/escrow'
 import { Shield, AlertCircle, CheckCircle, Clock, ArrowLeft, ExternalLink } from 'lucide-react'
 
 const STATUS_STEPS = ['created', 'escrow_pending', 'payment_pending', 'payment_sent', 'confirming', 'completed']
@@ -31,7 +31,7 @@ const CHAIN_INFO = {
 export default function TradeDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const { getWalletForNetwork } = useWallet()
   const [trade, setTrade] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -43,7 +43,7 @@ export default function TradeDetailPage() {
     try {
       const t = await db.entities.Trade.get(id)
       setTrade(t)
-    } catch (e) { console.error('Failed to load trade:', e) }
+    } catch (e) { console.error(e) }
     setLoading(false)
   }
 
@@ -63,10 +63,8 @@ export default function TradeDetailPage() {
   const chainInfo = CHAIN_INFO[network] || CHAIN_INFO.bsc
   const walletConnected = !!getWalletForNetwork(network)
 
-  // Seller pays the fee
-  const sellerCost = calculateSellerCost(trade.amount)
-  // Buyer receives the full trade amount, no deduction
-  const buyerReceives = trade.amount
+  // Dual fee: seller pays 0.4% on top, buyer pays 0.4% from received
+  const fees = calculateFees(trade.amount)
 
   const updateStatus = async (newStatus, extra = {}) => {
     setActionLoading(true)
@@ -88,7 +86,7 @@ export default function TradeDetailPage() {
         escrow_locked_at: new Date().toISOString(),
         seller_deposit_amount: result.totalLocked,
       })
-      toast.success(`USDT locked in escrow. You deposited ${formatUSDT(result.totalLocked)} (trade + 0.8% fee).`)
+      toast.success(`USDT locked. You deposited ${formatUSDT(fees.sellerDeposit)} (trade + 0.4% seller fee).`)
     } catch (err) { toast.error(err.shortMessage || err.message || 'Failed to lock escrow') }
     setActionLoading(false)
   }
@@ -113,7 +111,7 @@ export default function TradeDetailPage() {
     try {
       const result = await escrow.releaseFunds(network, trade.trade_id)
       await updateStatus('completed', { release_tx_hash: result.txHash, completed_at: new Date().toISOString() })
-      toast.success(`USDT released to buyer. Buyer received ${formatUSDT(buyerReceives)}. Fee of ${formatUSDT(sellerCost.fee)} collected.`)
+      toast.success(`USDT released. Buyer received ${formatUSDT(fees.buyerReceives)}. Platform collected ${formatUSDT(fees.totalFees)} in fees.`)
     } catch (err) { toast.error(err.shortMessage || err.message || 'Failed to release funds') }
     setActionLoading(false)
   }
@@ -155,7 +153,7 @@ export default function TradeDetailPage() {
         <ArrowLeft className="w-4 h-4" /> Back to dashboard
       </button>
 
-      {/* Trade header */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-4 sm:mb-6">
         <div className="min-w-0">
           <h1 className="font-heading font-bold text-xl sm:text-2xl break-all">{trade.trade_id}</h1>
@@ -168,7 +166,7 @@ export default function TradeDetailPage() {
         } className="flex-shrink-0">{STATUS_LABELS[trade.status] || trade.status}</Badge>
       </div>
 
-      {/* Progress tracker */}
+      {/* Progress */}
       {trade.status !== 'cancelled' && trade.status !== 'disputed' && (
         <div className="flex items-center gap-1 sm:gap-2 mb-6 sm:mb-8 overflow-x-auto pb-2 -mx-3 px-3">
           {STATUS_STEPS.map((step, i) => (
@@ -191,49 +189,36 @@ export default function TradeDetailPage() {
         <Card className="p-4"><p className="text-xs text-muted-foreground">Network</p><p className="font-semibold text-sm sm:text-lg mt-1 uppercase">{network}</p></Card>
       </div>
 
-      {/* Fee breakdown - seller pays */}
+      {/* Fee breakdown - both parties pay */}
       <Card className="mb-4 sm:mb-6 p-4 sm:p-5">
         <div className="flex items-start gap-3 mb-4">
           <Shield className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm sm:text-base">Smart Contract Escrow</p>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">USDT locked in a self-executing smart contract. The seller pays the 0.8% escrow fee. The buyer receives the full trade amount.</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">Both parties pay a 0.4% fee (0.8% total). The seller adds their fee on top of the trade amount. The buyer's fee is deducted from the received USDT. All handled by the smart contract.</p>
           </div>
         </div>
 
-        {/* Fee breakdown */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-          {isSeller && (
-            <div className="rounded-lg bg-secondary p-3 border border-primary/20">
-              <p className="text-xs text-muted-foreground mb-1">You deposit (amount + 0.8% fee)</p>
-              <p className="font-semibold text-primary text-sm sm:text-base">{formatUSDT(sellerCost.total)}</p>
-              <p className="text-xs text-muted-foreground mt-1">{formatUSDT(trade.amount)} + {formatUSDT(sellerCost.fee)} fee</p>
-            </div>
-          )}
-          {isBuyer && (
-            <div className="rounded-lg bg-secondary p-3 border border-emerald-500/20">
-              <p className="text-xs text-muted-foreground mb-1">You receive (full amount)</p>
-              <p className="font-semibold text-emerald-500 text-sm sm:text-base">{formatUSDT(buyerReceives)}</p>
-              <p className="text-xs text-muted-foreground mt-1">No fees deducted from your USDT</p>
-            </div>
-          )}
-          {!isSeller && !isBuyer && (
-            <>
-              <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground mb-1">Seller deposits</p>
-                <p className="font-semibold text-sm sm:text-base">{formatUSDT(sellerCost.total)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Trade + 0.8% fee</p>
-              </div>
-              <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground mb-1">Buyer receives</p>
-                <p className="font-semibold text-sm sm:text-base">{formatUSDT(buyerReceives)}</p>
-                <p className="text-xs text-muted-foreground mt-1">Full trade amount</p>
-              </div>
-            </>
-          )}
+        {/* Fee breakdown grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <div className="rounded-lg bg-secondary p-3 border border-amber-500/20">
+            <p className="text-xs text-muted-foreground mb-1">Seller deposits</p>
+            <p className="font-semibold text-sm sm:text-base">{formatUSDT(fees.sellerDeposit)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatUSDT(trade.amount)} + {formatUSDT(fees.sellerFee)} fee</p>
+          </div>
+          <div className="rounded-lg bg-secondary p-3 border border-emerald-500/20">
+            <p className="text-xs text-muted-foreground mb-1">Buyer receives</p>
+            <p className="font-semibold text-sm sm:text-base">{formatUSDT(fees.buyerReceives)}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatUSDT(trade.amount)} - {formatUSDT(fees.buyerFee)} fee</p>
+          </div>
+          <div className="rounded-lg bg-secondary p-3 border border-primary/20">
+            <p className="text-xs text-muted-foreground mb-1">Platform collects</p>
+            <p className="font-semibold text-primary text-sm sm:text-base">{formatUSDT(fees.totalFees)}</p>
+            <p className="text-xs text-muted-foreground mt-1">0.4% seller + 0.4% buyer</p>
+          </div>
         </div>
 
-        {/* On-chain transaction evidence */}
+        {/* On-chain tx evidence */}
         {trade.escrow_tx_hash && (
           <div className="rounded-lg bg-secondary p-3 mt-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -278,7 +263,7 @@ export default function TradeDetailPage() {
         </div>
       </Card>
 
-      {/* Wallet connection warning */}
+      {/* Wallet warning */}
       {!walletConnected && trade.status !== 'completed' && trade.status !== 'cancelled' && (
         <Card className="border-amber-500/30 p-4 mb-4">
           <div className="flex items-start gap-3">
@@ -301,12 +286,12 @@ export default function TradeDetailPage() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Lock USDT in smart contract</p>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  You will deposit {formatUSDT(sellerCost.total)} ({formatUSDT(trade.amount)} trade + {formatUSDT(sellerCost.fee)} escrow fee). The contract holds the funds. The buyer receives {formatUSDT(buyerReceives)} on release. If the trade is cancelled, your full deposit is returned.
+                  You deposit {formatUSDT(fees.sellerDeposit)} ({formatUSDT(trade.amount)} trade + {formatUSDT(fees.sellerFee)} seller fee at 0.4%). The buyer will receive {formatUSDT(fees.buyerReceives)} (their 0.4% fee is deducted from the trade amount). If cancelled, your full deposit of {formatUSDT(fees.sellerDeposit)} is returned.
                 </p>
               </div>
             </div>
             <Button onClick={handleLockEscrow} loading={actionLoading} disabled={!walletConnected} className="w-full sm:w-auto">
-              Lock {formatUSDT(sellerCost.total)} in Escrow
+              Lock {formatUSDT(fees.sellerDeposit)} in Escrow
             </Button>
           </Card>
         )}
@@ -319,7 +304,7 @@ export default function TradeDetailPage() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Pay the seller</p>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Send {formatMWK(trade.amount * trade.rate)} to the seller via your agreed payment method. USDT is already locked in escrow. You will receive {formatUSDT(buyerReceives)} — the full trade amount with no fees deducted.
+                  Send {formatMWK(trade.amount * trade.rate)} to the seller. USDT is locked in escrow. On release you will receive {formatUSDT(fees.buyerReceives)} — the trade amount minus your 0.4% buyer fee ({formatUSDT(fees.buyerFee)}).
                 </p>
               </div>
             </div>
@@ -335,7 +320,7 @@ export default function TradeDetailPage() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Confirm payment and release USDT</p>
                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                  Verify receipt of {formatMWK(trade.amount * trade.rate)} in your account. The smart contract will send {formatUSDT(buyerReceives)} to the buyer and {formatUSDT(sellerCost.fee)} to the platform wallet.
+                  Verify receipt of {formatMWK(trade.amount * trade.rate)}. The contract sends {formatUSDT(fees.buyerReceives)} to the buyer and {formatUSDT(fees.totalFees)} to the platform wallet (your 0.4% + buyer's 0.4%).
                 </p>
               </div>
             </div>
@@ -353,7 +338,7 @@ export default function TradeDetailPage() {
               <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
               <div>
                 <p className="font-medium text-emerald-500 text-sm sm:text-base">Trade completed</p>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Buyer received {formatUSDT(buyerReceives)}. Escrow fee of {formatUSDT(sellerCost.fee)} was paid by the seller.</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Buyer received {formatUSDT(fees.buyerReceives)}. Platform collected {formatUSDT(fees.totalFees)} in fees (0.4% seller + 0.4% buyer).</p>
               </div>
             </div>
           </Card>
