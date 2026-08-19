@@ -1,16 +1,11 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AuthProvider } from './context/AuthContext'
-
-const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } })
+import { supabase, isSupabaseConfigured, db } from './api/supabaseClient'
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <div style={{padding:'2rem',color:'#0f0',fontFamily:'monospace',minHeight:'100vh',background:'#111'}}>
-          <h1>Test: QueryClient + AuthProvider only</h1>
-        </div>
-      </AuthProvider>
-    </QueryClientProvider>
+    <div style={{padding:'2rem',color:'#0f0',fontFamily:'monospace',minHeight:'100vh',background:'#111'}}>
+      <h1>Test: supabase import</h1>
+      <p>isSupabaseConfigured: {String(isSupabaseConfigured)}</p>
+      <p>supabase: {typeof supabase}</p>
+    </div>
   )
 }
