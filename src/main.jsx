@@ -1,13 +1,21 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-)
+function renderApp(App) {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    React.createElement(App)
+  )
+}
+
+// Use dynamic import to catch module errors
+import('./App')
+  .then(mod => renderApp(mod.default))
+  .catch(err => {
+    document.getElementById('root').innerHTML = 
+      '<div style="color:red;padding:2rem;font-family:monospace;background:#111;min-height:100vh">' +
+      '<h1>CAUGHT MODULE ERROR</h1>' +
+      '<pre style="white-space:pre-wrap;word-break:break-all">' + 
+      (err && err.stack ? err.stack : String(err)) +
+      '</pre></div>'
+  })
