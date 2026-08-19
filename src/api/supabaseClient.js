@@ -3,20 +3,38 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
-// Create client even with empty values to prevent crashes
-// The app will show appropriate empty states when Supabase isn't configured
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key',
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  }
-)
-
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+
+// Lazy-create the client only if configured; otherwise use a no-op proxy
+let _supabase = null
+
+function getSupabase() {
+  if (_supabase) return _supabase
+  if (!isSupabaseConfigured) {
+    // Return a proxy that no-ops everything
+    _supabase = new Proxy({}, {
+      get(_target, prop) {
+        if (prop === 'auth') {
+          return {
+            getSession: async () => ({ data: { session: null } }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+            signInWithPassword: async () => { throw new Error('Supabase not configured') },
+            signUp: async () => { throw new Error('Supabase not configured') },
+            signOut: async () => {},
+          }
+        }
+        return () => async () => ({ data: null, error: null })
+      }
+    })
+    return _supabase
+  }
+  _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: true, autoRefreshToken: true },
+  })
+  return _supabase
+}
+
+export const supabase = getSupabase()
 
 // Database entity helpers
 export const db = {
