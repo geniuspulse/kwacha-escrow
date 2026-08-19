@@ -11,6 +11,24 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    window.__errors = [];
+    window.addEventListener('error', function(e) {
+      window.__errors.push({
+        message: e.message,
+        filename: e.filename,
+        line: e.lineno,
+        col: e.colno,
+        error: e.error ? e.error.stack : null
+      });
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      window.__errors.push({
+        type: 'unhandledrejection',
+        reason: e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : String(e)
+      });
+    });
+  </script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
