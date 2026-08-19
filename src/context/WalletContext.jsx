@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { connectBscWallet, connectTrc20Wallet, getWalletAddress, isWalletAvailable } from '@/lib/escrow'
+import { connectBscWallet, connectTrc20Wallet, getWalletAddress, isWalletAvailable } from '../lib/escrow'
 
 const WalletContext = createContext(null)
 

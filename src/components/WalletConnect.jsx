@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useWallet } from '@/context/WalletContext'
+import { useWallet } from '../context/WalletContext'
 import { toast } from 'sonner'
-import { truncateAddress } from '@/lib/utils'
+import { truncateAddress } from '../lib/utils'
 import { ChevronDown, Wallet as WalletIcon, Check } from 'lucide-react'
 
 export default function WalletConnect() {

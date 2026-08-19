@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
-import { db } from '@/api/supabaseClient'
-import { Card, Badge } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { formatUSDT, formatMWK, timeAgo } from '@/lib/utils'
+import { useAuth } from '../context/AuthContext'
+import { db } from '../api/supabaseClient'
+import { Card, Badge } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { formatUSDT, formatMWK, timeAgo } from '../lib/utils'
 import { Wallet, TrendingUp, Clock, CheckCircle, Plus, ArrowRight } from 'lucide-react'
 
 export default function DashboardPage() {

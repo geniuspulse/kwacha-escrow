@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { db } from '@/api/supabaseClient'
-import { Card, Badge } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { formatUSDT, formatMWK, timeAgo } from '@/lib/utils'
+import { db } from '../api/supabaseClient'
+import { Card, Badge } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { formatUSDT, formatMWK, timeAgo } from '../lib/utils'
 import { toast } from 'sonner'
 import { Users, Gavel, TrendingUp, Shield, CheckCircle, ExternalLink } from 'lucide-react'
 

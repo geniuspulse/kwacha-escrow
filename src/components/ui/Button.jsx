@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn } from '../../lib/utils'
 import { Loader2 } from 'lucide-react'
 
 export function Button({ className, variant = 'default', size = 'default', children, loading, disabled, ...props }) {

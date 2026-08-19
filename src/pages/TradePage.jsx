@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { db } from '@/api/supabaseClient'
-import { formatUSDT, formatMWK, timeAgo } from '@/lib/utils'
-import { Badge } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { useAuth } from '@/context/AuthContext'
+import { db } from '../api/supabaseClient'
+import { formatUSDT, formatMWK, timeAgo } from '../lib/utils'
+import { Badge } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { useAuth } from '../context/AuthContext'
 import { Search, ArrowRight, Wallet } from 'lucide-react'
 
 const PAYMENT_METHODS = {

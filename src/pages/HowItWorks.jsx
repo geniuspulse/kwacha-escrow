@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Card } from '@/components/ui/Card'
+import { Card } from '../components/ui/Card'
 import { Shield, ArrowRight, FileCode, Lock } from 'lucide-react'
 
 export default function HowItWorks() {
